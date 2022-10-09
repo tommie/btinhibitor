@@ -9,3 +9,6 @@ AssertFileIsExecutable=/usr/bin/python3
 Environment=BTINHIBITOR_INHIBITORS=i
 ExecStart=/usr/bin/python3 -m btinhibitor.cli --inhibitors "$BTINHIBITOR_INHIBITORS" "$BTINHIBITOR_ADDRS"
 Restart=on-failure
+
+[Install]
+WantedBy=gnome-session-manager.target
