@@ -1,0 +1,11 @@
+[Unit]
+Description=Bluetooth Session Inhibitor
+PartOf=gnome-session.target
+Requires=gnome-session-manager.target bluetooth.target
+ConditionEnvironment=BTINHIBITOR_ADDRS
+AssertFileIsExecutable=/usr/bin/python3
+
+[Service]
+Environment=BTINHIBITOR_INHIBITORS=i
+ExecStart=/usr/bin/python3 -m btinhibitor.cli --inhibitors "$BTINHIBITOR_INHIBITORS" "$BTINHIBITOR_ADDRS"
+Restart=on-failure

@@ -10,13 +10,13 @@ triggering the screenlock.
 Using the addresses of two BT devices:
 
 ```shell
-btinhibitor 11:22:33:44:55:66 12:34:56:78:90:12
+$ btinhibitor 11:22:33:44:55:66 12:34:56:78:90:12
 ```
 
 Inhibiting suspend instead of the screensaver:
 
 ```shell
-btinhibitor --inhibitors s 11:22:33:44:55:66 12:34:56:78:90:12
+$ btinhibitor --inhibitors s 11:22:33:44:55:66 12:34:56:78:90:12
 ```
 
 ## Inhibitors
@@ -28,3 +28,15 @@ These `--inhibitor` flags are supported, defaulting to "i":
 * **o** log out
 * **s** suspend
 * **u** switch user
+
+## Installation
+
+Assuming you have the repository checked out in the current directory:
+
+```shell
+$ pip install .
+$ mkdir -p ~/.config/systemd/user
+$ cp btinhibitor.service ~/.config/systemd/user/
+$ systemctl --user daemon-reload
+$ systemctl --user enable btinhibitor.service
+```
