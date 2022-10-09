@@ -31,6 +31,12 @@ These `--inhibitor` flags are supported, defaulting to "i":
 
 ## Installation
 
+Create a file called `~/.config/environment.d/btinhibitor.conf` with the device addresses:
+
+```sh
+BTINHIBITOR_ADDRS="xx:xx:xx:xx:xx:xx"
+```
+
 Assuming you have the repository checked out in the current directory:
 
 ```shell
