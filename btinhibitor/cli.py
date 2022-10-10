@@ -32,8 +32,10 @@ log = logging.getLogger(__name__)
 
 def main():
     argp = argparse.ArgumentParser(description=__doc__)
-    argp.add_argument('--log-level', default='info', help='log level (debug, info, warning, error, critical) [%(default)s]')
+    argp.add_argument('--duration', type=float, metavar='secs', default=1, help='the LE discovery duration [%(default)s]')
     argp.add_argument('--inhibitors', metavar='imosu', default='i', help='a string of 1-character flags: o=log out, u=switch user, s=suspend, i=idle, m=auto mount [%(default)s]')
+    argp.add_argument('--interval', type=float, metavar='secs', default=60, help='the LE discovery interval [%(default)s]')
+    argp.add_argument('--log-level', default='info', help='log level (debug, info, warning, error, critical) [%(default)s]')
     argp.add_argument('--reason', default='Bluetooth device presence', help='the reason string provided to the GNOME session manager [%(default)s]')
     argp.add_argument('addrs', metavar='XX:XX:XX:XX:XX:XX', nargs='+', help='addresses of Bluetooth devices that will cause an inhibit')
     args = argp.parse_args()
@@ -54,7 +56,7 @@ def main():
     dbus.mainloop.glib.DBusGMainLoop(set_as_default=True)
     mainloop = GLib.MainLoop()
 
-    dd = btinhibitor.DeviceDiscoverer(dbus.SystemBus(), mainloop)
+    dd = btinhibitor.DeviceDiscoverer(dbus.SystemBus(), mainloop, interval=args.interval, timeout=args.duration)
     si = btinhibitor.SessionInhibitor(dbus.SessionBus(), args.reason, inh_mask, 'btinhibitor')
     dpi = btinhibitor.DevicePresenceInhibitor(dd, si, [addr.upper() for addr in args.addrs])
 
