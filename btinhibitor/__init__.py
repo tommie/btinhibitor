@@ -19,6 +19,7 @@ GNOME_SESSION_MANAGER_IFACE = 'org.gnome.SessionManager'
 
 DISCOVERY_FILTER = dict(
     Transport='le')
+INFINITE_FUTURE = 2 * int(time.time())
 
 
 log = logging.getLogger(__name__)
@@ -47,13 +48,14 @@ class DeviceDiscoverer:
         self.bus = bus
         self.om = dbus.Interface(bus.get_object(BLUEZ_SERVICE, '/'), OBJECT_MANAGER_IFACE)
         self.mainloop = mainloop
+        self.interval = interval
         self.timeout = timeout
 
         self.on_done = None
 
         self._adps = {}
         self._devs = {}
-        self._present_devs = set()
+        self._present_devs = {}  # addr -> expiration
         self._latest = time.time()
         self._done_latest = 0
         self._rsig = self.om.connect_to_signal('InterfacesRemoved', self._on_interfaces_removed)
@@ -112,14 +114,20 @@ class DeviceDiscoverer:
         self._discovering = False
         log.debug('Discovery done.')
 
+        self._expire()
+
         return self._on_done()
 
     def _on_done(self):
         """Called when a new set of devices is available."""
 
         if self.on_done and self._done_latest < self._latest:
-            log.debug('Present devices: %s', self._present_devs)
-            self.on_done(self._present_devs)
+            now = time.time()
+            present = set(addr
+                          for addr, exp in self._present_devs.items()
+                          if exp >= now)
+            log.debug('Present devices: %s', present)
+            self.on_done(present)
             self._done_latest = self._latest
 
         self._stopto = None
@@ -152,7 +160,7 @@ class DeviceDiscoverer:
             self._devs[path] = dev
 
             if _is_device_present(props):
-                self._on_dev_present(dev.address)
+                self._on_dev_present(dev.address, props['Connected'])
 
     def _on_interfaces_removed(self, path: str, ifaces: [str]):
         """Called when the Bluez ObjectManager has seen a removed interface.
@@ -183,32 +191,54 @@ class DeviceDiscoverer:
         props = dev.props.GetAll(BLUEZ_DEVICE_IFACE)
         if _is_device_present(props):
             log.debug('BT device properties changed, now present: %s, %s', path, changed)
-            self._on_dev_present(dev.address)
+            self._on_dev_present(dev.address, props['Connected'])
         else:
             log.debug('BT device properties changed, now absent: %s, %s', path, changed)
             self._on_dev_absent(dev.address)
 
-    def _on_dev_present(self, addr: str):
+    def _on_dev_present(self, addr: str, connected: bool):
         """Called when a device seems to be present."""
 
-        if addr in self._present_devs:
+        now = time.time()
+        exp = self._present_devs.get(addr, None)
+        if connected:
+            self._present_devs[addr] = INFINITE_FUTURE
+        else:
+            self._present_devs[addr] = now + self.interval + self.timeout
+        if exp and exp >= now:
             return
 
-        self._present_devs.add(addr)
-        self._latest = time.time()
+        log.debug('Marked device %r present.', addr)
+        self._latest = now
         if not self._stopto:
             self._stopto = GLib.idle_add(self._on_done)
 
     def _on_dev_absent(self, addr: str):
         """Called when a device seems to be absent."""
 
-        if addr not in self._present_devs:
+        now = time.time()
+        exp = self._present_devs.get(addr, None)
+        if not exp or exp < now:
             return
 
-        self._present_devs.remove(addr)
-        self._latest = time.time()
+        log.debug('Marked device %r absent.', addr)
+        if exp == INFINITE_FUTURE:
+            del self._present_devs[addr]
+        self._latest = now
         if not self._stopto:
             self._stopto = GLib.idle_add(self._on_done)
+
+    def _expire(self):
+        """Removes devices that have not been present for some time."""
+
+        now = time.time()
+        present_devs = {addr: exp
+                              for addr, exp in self._present_devs.items()
+                              if exp >= now}
+        if len(present_devs) != len(self._present_devs):
+            log.debug('Expired devices: %r', set(self._present_devs) - set(present_devs))
+            self._present_devs = present_devs
+            self._latest = now
 
 
 def _is_device_present(props: Dict[str, any]):
@@ -218,7 +248,7 @@ def _is_device_present(props: Dict[str, any]):
         # No matter what, we don't care about this device.
         return False
 
-    if (props['Trusted'] or props['Paired']) and not props.get('Connected', False):
+    if props['Paired'] and not props['Connected']:
         # The device object exists because it is configured, not present.
         return False
 
