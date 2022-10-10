@@ -312,13 +312,15 @@ class DevicePresenceInhibitor:
         self.inhibitor = inhibitor
         self.anyOfAddrs = set(anyOfAddrs)
 
-        self._prev = False
+        self._prev = set()
 
     def _on_devices(self, dev_addrs: Set[str]):
         current = dev_addrs & self.anyOfAddrs
-        if bool(current) == self._prev:
+        prev = self._prev
+        if current == prev:
             return
-        self._prev = bool(current)
+
+        self._prev = current
 
         if current:
             log.info('Inhibiting devices present: %s', current)
