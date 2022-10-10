@@ -17,6 +17,9 @@ BLUEZ_DEVICE_IFACE = 'org.bluez.Device1'
 GNOME_SESSION_MANAGER_SERVICE = 'org.gnome.SessionManager'
 GNOME_SESSION_MANAGER_IFACE = 'org.gnome.SessionManager'
 
+DISCOVERY_FILTER = dict(
+    Transport='le')
+
 
 log = logging.getLogger(__name__)
 
@@ -91,6 +94,7 @@ class DeviceDiscoverer:
 
         log.debug('Discovering devices...')
         for adp in self._adps.values():
+            adp.SetDiscoveryFilter(DISCOVERY_FILTER)
             adp.StartDiscovery()
 
         self._discovering = True
@@ -133,6 +137,7 @@ class DeviceDiscoverer:
             adp = dbus.Interface(self.bus.get_object(BLUEZ_SERVICE, path), BLUEZ_ADAPTER_IFACE)
             self._adps[path] = adp
             if self._discovering:
+                adp.SetDiscoveryFilter(DISCOVERY_FILTER)
                 adp.StartDiscovery()
         elif BLUEZ_DEVICE_IFACE in ifaces and path not in self._devs:
             log.debug('Found new BT device: %s', path)
