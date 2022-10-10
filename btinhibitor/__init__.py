@@ -171,6 +171,9 @@ class DeviceDiscoverer:
     def _on_dev_props_changed(self, path: str, iface: str, changed: Dict[str, any], invalidated: [str]):
         """Called when a device's properties have changed."""
 
+        if not (IMPORTANT_DEV_PROPS & (set(changed) | set(invalidated))):
+            return
+
         dev = self._devs[path]
         props = dev.props.GetAll(BLUEZ_DEVICE_IFACE)
         if _is_device_present(props):
@@ -217,6 +220,8 @@ def _is_device_present(props: Dict[str, any]):
     # The device is connected, or it's a device known because it is present.
     return True
 
+
+IMPORTANT_DEV_PROPS = set(['Blocked', 'Paired', 'Connected'])
 
 class InhibitMask(Enum):
     """The GNOME session manager inhibit value masks.
