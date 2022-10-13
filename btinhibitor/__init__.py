@@ -5,6 +5,7 @@ import time
 from typing import Dict, Iterable, Set
 
 import dbus
+import dbus.exceptions
 from gi.repository import GLib
 
 
@@ -110,7 +111,13 @@ class DeviceDiscoverer:
             return True
 
         for adp in self._adps.values():
-            adp.StopDiscovery()
+            try:
+                adp.StopDiscovery()
+            except dbus.exceptions.DBusException as ex:
+                if ex.get_dbus_name() != 'org.bluez.Error.Failed':
+                    raise
+                # If an adapter was added, but discovery failed to start.
+                log.debug('Exception ignored: %s', ex)
         self._discovering = False
         log.debug('Discovery done.')
 
@@ -145,12 +152,26 @@ class DeviceDiscoverer:
             adp = dbus.Interface(self.bus.get_object(BLUEZ_SERVICE, path), BLUEZ_ADAPTER_IFACE)
             self._adps[path] = adp
             if self._discovering:
-                adp.SetDiscoveryFilter(DISCOVERY_FILTER)
-                adp.StartDiscovery()
+                try:
+                    adp.SetDiscoveryFilter(DISCOVERY_FILTER)
+                    adp.StartDiscovery()
+                except dbus.exceptions.DBusException as ex:
+                    # Discovery happens regularly; no need to retry.
+                    if ex.get_dbus_name() not in ('org.bluez.Error.NotReady', 'org.freedesktop.DBus.Error.UnknownObject'):
+                        raise
+                    log.debug('Exception ignored: %s', ex)
         elif BLUEZ_DEVICE_IFACE in ifaces and path not in self._devs:
             log.debug('Found new BT device: %s', path)
             dev_props = dbus.Interface(self.bus.get_object(BLUEZ_SERVICE, path), dbus.PROPERTIES_IFACE)
-            props = dev_props.GetAll(BLUEZ_DEVICE_IFACE)
+
+            try:
+                props = dev_props.GetAll(BLUEZ_DEVICE_IFACE)
+            except dbus.exceptions.DBusException as ex:
+                if ex.get_dbus_name() == 'org.freedesktop.DBus.Error.UnknownObject':
+                    log.debug('Exception ignored (device skipped): %s', ex)
+                    return
+                raise
+
             dev = DeviceRecord(
                 str(props['Address']),
                 dev_props,
@@ -173,7 +194,13 @@ class DeviceDiscoverer:
             log.debug('BT adapter removed: %s', path)
             adp = self._adps.pop(path, None)
             if adp and self._discovering:
-                adp.StopDiscovery()
+                try:
+                    adp.StopDiscovery()
+                except dbus.exceptions.DBusException as ex:
+                    if ex.get_dbus_name() != 'org.bluez.Error.Failed':
+                        raise
+                    # If discovery failed to start.
+                    log.debug('Exception ignored: %s', ex)
         elif BLUEZ_DEVICE_IFACE in ifaces and path in self._devs:
             log.debug('BT device removed: %s', path)
             dev = self._devs.pop(path)
