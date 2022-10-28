@@ -97,8 +97,13 @@ class DeviceDiscoverer:
 
         log.debug('Discovering devices...')
         for adp in self._adps.values():
-            adp.SetDiscoveryFilter(DISCOVERY_FILTER)
-            adp.StartDiscovery()
+            try:
+                adp.SetDiscoveryFilter(DISCOVERY_FILTER)
+                adp.StartDiscovery()
+            except dbus.exceptions.DBusException as ex:
+                if ex.get_dbus_name() != 'org.freedesktop.DBus.Error.UnknownObject':
+                    raise
+                log.debug('Exception ignored: %s', ex)
 
         self._discovering = True
         self._stopto = GLib.timeout_add_seconds(self.timeout, self._on_stop)
@@ -197,9 +202,9 @@ class DeviceDiscoverer:
                 try:
                     adp.StopDiscovery()
                 except dbus.exceptions.DBusException as ex:
-                    if ex.get_dbus_name() != 'org.bluez.Error.Failed':
+                    if ex.get_dbus_name() not in ('org.bluez.Error.Failed', 'org.freedesktop.DBus.Error.UnknownObject'):
                         raise
-                    # If discovery failed to start.
+                    # If discovery failed to start, or the adapter is already gone (very likely).
                     log.debug('Exception ignored: %s', ex)
         elif BLUEZ_DEVICE_IFACE in ifaces and path in self._devs:
             log.debug('BT device removed: %s', path)
