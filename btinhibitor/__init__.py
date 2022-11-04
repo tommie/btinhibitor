@@ -119,7 +119,7 @@ class DeviceDiscoverer:
             try:
                 adp.StopDiscovery()
             except dbus.exceptions.DBusException as ex:
-                if ex.get_dbus_name() != 'org.bluez.Error.Failed':
+                if ex.get_dbus_name() not in ('org.bluez.Error.Failed', 'org.freedesktop.DBus.Error.UnknownObject'):
                     raise
                 # If an adapter was added, but discovery failed to start.
                 log.debug('Exception ignored: %s', ex)
