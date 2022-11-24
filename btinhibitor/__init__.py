@@ -119,7 +119,7 @@ class DeviceDiscoverer:
             try:
                 adp.StopDiscovery()
             except dbus.exceptions.DBusException as ex:
-                if ex.get_dbus_name() not in ('org.bluez.Error.Failed', 'org.freedesktop.DBus.Error.UnknownObject'):
+                if ex.get_dbus_name() not in ('org.bluez.Error.Failed', 'org.bluez.Error.InProgress', 'org.freedesktop.DBus.Error.UnknownObject'):
                     raise
                 # If an adapter was added, but discovery failed to start.
                 log.debug('Exception ignored: %s', ex)
@@ -172,7 +172,7 @@ class DeviceDiscoverer:
             try:
                 props = dev_props.GetAll(BLUEZ_DEVICE_IFACE)
             except dbus.exceptions.DBusException as ex:
-                if ex.get_dbus_name() == 'org.freedesktop.DBus.Error.UnknownObject':
+                if ex.get_dbus_name() in ('org.freedesktop.DBus.Error.UnknownObject', 'org.freedesktop.DBus.Error.NoReply'):
                     log.debug('Exception ignored (device skipped): %s', ex)
                     return
                 raise
@@ -202,7 +202,7 @@ class DeviceDiscoverer:
                 try:
                     adp.StopDiscovery()
                 except dbus.exceptions.DBusException as ex:
-                    if ex.get_dbus_name() not in ('org.bluez.Error.Failed', 'org.freedesktop.DBus.Error.UnknownObject'):
+                    if ex.get_dbus_name() not in ('org.bluez.Error.Failed', 'org.bluez.Error.NotReady', 'org.freedesktop.DBus.Error.UnknownObject'):
                         raise
                     # If discovery failed to start, or the adapter is already gone (very likely).
                     log.debug('Exception ignored: %s', ex)
