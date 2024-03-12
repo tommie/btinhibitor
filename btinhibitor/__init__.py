@@ -101,7 +101,7 @@ class DeviceDiscoverer:
                 adp.SetDiscoveryFilter(DISCOVERY_FILTER)
                 adp.StartDiscovery()
             except dbus.exceptions.DBusException as ex:
-                if ex.get_dbus_name() not in ('org.bluez.Error.NotReady', 'org.freedesktop.DBus.Error.UnknownObject'):
+                if ex.get_dbus_name() not in ('org.bluez.Error.InProgress', 'org.bluez.Error.NotReady', 'org.freedesktop.DBus.Error.UnknownObject'):
                     raise
                 log.debug('Exception ignored: %s', ex)
 
