@@ -56,8 +56,8 @@ def main():
     dbus.mainloop.glib.DBusGMainLoop(set_as_default=True)
     mainloop = GLib.MainLoop()
 
-    dd = btinhibitor.DeviceDiscoverer(dbus.SystemBus(), mainloop, interval=args.interval, timeout=args.duration)
-    si = btinhibitor.SessionInhibitor(dbus.SessionBus(), args.reason, inh_mask, 'btinhibitor')
+    dd = btinhibitor.DeviceDiscoverer(dbus.SystemBus(), interval=args.interval, timeout=args.duration)
+    si = btinhibitor.SessionInhibitor(dbus.SessionBus(), args.reason, inh_mask, 'btinhibitor', mainloop)
     dpi = btinhibitor.DevicePresenceInhibitor(dd, si, [addr.upper() for addr in args.addrs])
 
     log.info('Inhibiting %r when any Bluetooth device of %r is present.', args.inhibitors, args.addrs)

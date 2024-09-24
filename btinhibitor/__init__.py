@@ -17,6 +17,7 @@ BLUEZ_DEVICE_IFACE = 'org.bluez.Device1'
 
 GNOME_SESSION_MANAGER_SERVICE = 'org.gnome.SessionManager'
 GNOME_SESSION_MANAGER_IFACE = 'org.gnome.SessionManager'
+GNOME_SESSION_MANAGER_CLIENT_PRIVATE_IFACE = 'org.gnome.SessionManager.ClientPrivate'
 
 DISCOVERY_FILTER = dict(
     Transport='le')
@@ -45,10 +46,9 @@ class DeviceDiscoverer:
     discovery interval may be worthwhile.
     """
 
-    def __init__(self, bus: dbus.Bus, mainloop: GLib.MainLoop, interval: float=60, timeout: float=1):
+    def __init__(self, bus: dbus.Bus, interval: float=60, timeout: float=1):
         self.bus = bus
         self.om = dbus.Interface(bus.get_object(BLUEZ_SERVICE, '/'), OBJECT_MANAGER_IFACE)
-        self.mainloop = mainloop
         self.interval = interval
         self.timeout = timeout
 
@@ -305,13 +305,53 @@ class InhibitMask(Enum):
 class SessionInhibitor:
     """A helper to issue inhibits in the GNOME session manager."""
 
-    def __init__(self, bus: dbus.Bus, reason: str, flags: int, client_name: str):
+    def __init__(self, bus: dbus.Bus, reason: str, flags: int, client_name: str, mainloop: GLib.MainLoop):
         self.sm = dbus.Interface(bus.get_object(GNOME_SESSION_MANAGER_SERVICE, '/org/gnome/SessionManager'), GNOME_SESSION_MANAGER_IFACE)
         self.reason = reason
         self.flags = flags
+        self.client_name = client_name
+        self.mainloop = mainloop
 
         self._client_id = self.sm.RegisterClient(client_name, client_name)
         self._inhibit_cookie = None
+
+        # We have to listen to these signals, since we register a
+        # client, or the Gnome session manager says we are frozen, and
+        # refuses to log out.
+        self._client = dbus.Interface(bus.get_object(GNOME_SESSION_MANAGER_SERVICE, self._client_id), GNOME_SESSION_MANAGER_CLIENT_PRIVATE_IFACE)
+        self._client.connect_to_signal('Stop', self._on_stop)
+        self._client.connect_to_signal('QueryEndSession', self._on_query_end_session)
+        self._client.connect_to_signal('EndSession', self._on_end_session)
+        self._client.connect_to_signal('CancelEndSession', self._on_cancel_end_session)
+
+    def _on_stop(self, flags):
+        """Terminates the process as requested by the session manager."""
+
+        log.info('Terminating as requested by the session manager.')
+        self.mainloop.quit()
+
+    def _on_query_end_session(self, flags):
+        """Responds to the session manager that we are ready to stop."""
+
+        log.debug('Session may terminate.')
+        if self._inhibit_cookie:
+            self.sm.Uninhibit(self._inhibit_cookie)
+            # We keep the cookie around for _on_cancel_end_session.
+        self._client.EndSessionResponse(True, "")
+
+    def _on_end_session(self, flags):
+        """Responds to the session manager that we are ready to stop."""
+
+        log.debug('Session is terminating.')
+        self._client.EndSessionResponse(True, "")
+
+    def _on_cancel_end_session(self):
+        """Resumes normal operation."""
+
+        log.debug('Session resumed.')
+        if self._inhibit_cookie:
+            self._inhibit_cookie = self.sm.Inhibit(self.client_name, 0, self.reason, self.flags)
+        self._client.EndSessionResponse(True, "")
 
     def close(self):
         """Unregisters any current inhibit and the client."""
@@ -325,7 +365,7 @@ class SessionInhibitor:
         """Inhibits the preconfigured flags, unless it is already active."""
 
         if not self._inhibit_cookie:
-            self._inhibit_cookie = self.sm.Inhibit(self._client_id, 0, self.reason, self.flags)
+            self._inhibit_cookie = self.sm.Inhibit(self.client_name, 0, self.reason, self.flags)
 
     def uninhibit(self):
         """Removes any inhibit created by this class."""
