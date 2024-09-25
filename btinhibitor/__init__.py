@@ -220,8 +220,16 @@ class DeviceDiscoverer:
             return
 
         dev = self._devs[path]
-        props = dev.props.GetAll(BLUEZ_DEVICE_IFACE)
-        if _is_device_present(props):
+        is_present = False
+        try:
+            props = dev.props.GetAll(BLUEZ_DEVICE_IFACE)
+            is_present = _is_device_present(props)
+        except dbus.exceptions.DBusException as ex:
+            if ex.get_dbus_name() != 'org.freedesktop.DBus.Error.UnknownObject':
+                raise
+            log.debug('Exception ignored: %s', ex)
+
+        if is_present:
             log.debug('BT device properties changed, now present: %s, %s', path, changed)
             self._on_dev_present(dev.address, props['Connected'])
         else:
